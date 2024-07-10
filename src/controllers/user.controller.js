@@ -24,10 +24,10 @@ const registerUser = asyncHandler( async (req, res) => {
     if(!/\S+@\S+\.\S+/.test(email))
         throw new apiError(400, "Email not valid!")
 
-    console.log(email)
+    //console.log(email)
 
     const userExists = User.findOne({ $or: [{email}, {username}] })
-    console.log(userExists);
+    //console.log(userExists);
 
     if(userExists)
         throw new apiError(409, "User already exists!")
