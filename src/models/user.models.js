@@ -30,8 +30,8 @@ const userSchema = new Schema({
     },
     watchHistory: [
         {
-        type: Schema.Types.ObjectId,
-        ref: "Video"
+            type: Schema.Types.ObjectId,
+            ref: "Video"
         }
     ],
     avatar: {
