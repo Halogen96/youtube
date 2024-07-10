@@ -50,9 +50,8 @@ const userSchema = new Schema({
 //Hooks (also known as middleware) are functions that are executed 
 //during specific stages of the lifecycle of a document. Pre saving in this case
 //PS: didnt use arrow function here cause we want the reference to the fields written above
-userSchema.pre("save", async function () {})
 
-userSchema.pre("save", async function () {
+userSchema.pre("save", async function (next) {
     if(this.isModified("password"))
         this.password = await bcrypt.hash(this.password, 10)
     next()

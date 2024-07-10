@@ -13,7 +13,9 @@ const registerUser = asyncHandler( async (req, res) => {
     //create a new User object in mongodb with the details from req body
     //remove password and refresh token from the response 
     //check for user creation and return the res
-    
+
+    //console.log(req.body);
+
     const { email, username, fullName, password } = req.body
     
     if ( [email, username, fullName, password].some( (field) => field?.trim() === "") ) {
@@ -24,16 +26,22 @@ const registerUser = asyncHandler( async (req, res) => {
     if(!/\S+@\S+\.\S+/.test(email))
         throw new apiError(400, "Email not valid!")
 
-    //console.log(email)
-
-    const userExists = User.findOne({ $or: [{email}, {username}] })
-    //console.log(userExists);
+    const userExists = await User.findOne({ $or: [{email}, {username}] })
 
     if(userExists)
         throw new apiError(409, "User already exists!")
 
+    // avatar is mandatory while coverImage is not
     const avatarLocalPath = req.files?.avatar[0]?.path
-    const coverImageLocalPath = req.files?.coverImage[0].path
+    //const coverImageLocalPath = req.files?.coverImage[0]?.path
+
+    let coverImageLocalPath
+    if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
+        coverImageLocalPath = req.files.coverImage[0].path
+    }
+
+    //console.log(req.files);
+    //console.log("precloudinary: " + avatarLocalPath);
 
     if (!avatarLocalPath) {
         throw new apiError(400, "Avatar is mandatory!")
@@ -50,7 +58,7 @@ const registerUser = asyncHandler( async (req, res) => {
     const user = await User.create({
         fullName,
         email,
-        username: username.toLowercase(),
+        username: username.toLowerCase(),
         password,
         avatar: avatar.url,
         coverImage: coverImage?.url || ""
