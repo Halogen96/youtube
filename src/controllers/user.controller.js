@@ -97,8 +97,8 @@ const loginUser = asyncHandler( async (req, res) => {
     //check if the password matches 
     //validate the access and the refresh token of the user
     
+    //const { email, username, password } = req.body
     const { email, username, password } = req.body
-    console.log(username);
 
     if(!username && !email) {
         throw new apiError(400, "Username or email is needed!")
@@ -168,4 +168,48 @@ const logoutUser = asyncHandler( async (req, res) => {
     )
 })
 
-export { registerUser, loginUser, logoutUser }
+const refreshAccessToken = asyncHandler( async (req, res) => {
+    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+
+    if (!incomingRefreshToken) {
+        throw new apiError(401, "Unautharized request!")
+    }
+
+    try {
+        const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
+    
+        const user = await User.findById(decodedToken?._id)
+    
+        if (!user) {
+            throw new apiError(401, "Unautharized request!")
+        }
+    
+        if (incomingRefreshToken !== user?.refreshToken) {
+            throw new apiError(400, "Refresh token is used or expired!")
+        }
+    
+        const { accessToken, newRefreshToken } = await generateAccessAndRefreshToken(user._id)
+    
+        //update the accessToken field in the cookie and send the response
+        res
+        .status(200)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", newRefreshToken, options)
+        .json(
+            new apiResponse(
+                200,
+                {accessToken, refreshToken: newRefreshToken}, 
+                "Access token renewed successfully!")
+        )
+
+    } catch (error) {
+        throw new apiError(401, error?.message || "Something went wrong while renewing tokens!")
+    }
+})
+
+export { 
+    registerUser, 
+    loginUser, 
+    logoutUser, 
+    refreshAccessToken 
+}
