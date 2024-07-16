@@ -3,6 +3,7 @@ import { apiError } from "../utils/apiError.js"
 import { User } from "../models/user.models.js"
 import { uploadOnCloudinary } from "../utils/cloudinary.js"
 import { apiResponse } from "../utils/apiResponse.js"
+import { mongoose } from "mongoose"
 
 const generateAccessAndRefreshToken = async (userId) => {
     try {
@@ -312,6 +313,134 @@ const updateCoverImage = asyncHandler( async (req, res) => {
     .json(new apiResponse(200, user, "Cover image udpated successfully!"))
 })
 
+const getUserChannelDetails = asyncHandler( async (req, res) => {
+    const username = req.params
+
+    if (!username.trim()) {
+        throw new apiError(400, "Username is missing!")
+    }
+
+    //we want to combine the user subscription and user models 
+
+    const channel = await User.aggregate([
+        // pipeline 1: get the user with specified username
+        {
+            $match: username?.toLowerCase()
+        },
+        // pipeline 2: get the subscribers documents
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+        },
+        // pipeline 3: get the channels subscribed to documents
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo"
+            }
+        },
+        // pipeline 4: add the new feilds: number of subscriber, subscriptions and whether subscribed or not
+        {
+            $addFields: {
+                subsribersCount: {
+                    $size: "$subscribers"
+                },
+                subsribedToCount: {
+                    $size: "$subscribedTo"  
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: {$in: [req.user?._id, "$subscribers.subscriber"]},
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        // pipeline 4: project the fields
+        {
+            $project: {
+                fullName: 1,
+                username: 1,
+                email: 1,
+                avatar: 1,
+                coverImage: 1,
+                subsribedToCount: 1,
+                subsribersCount: 1,
+                isSubscribed: 1
+            }
+        }
+    ])
+
+    if(!channel?.length) {
+        throw new apiError(404, "Channel not found!")
+    }
+
+    res
+    .status(200)
+    .json(new apiResponse(200, channel[0], "User channel fetched successfully!"))
+})
+
+// when we do req.user._id it gives us a string and not the mongodb object id
+// but when we use the findById method of mongoose, mongoose auto converts the string to an objectId
+// but aggregation pipeline is not handeled by mongoose, handled directly by mongodb
+// so when we pass the id in $match field, we have to pass an objectId
+
+// we have to write a subpipeline when joining videos and users
+// this is because in the owner feild of the videos schema, there is a objectId reference
+const getWatchHistory = asyncHandler( async (req, res) => {
+    
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user._id)
+            }
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [{
+                    $lookup: {
+                        from:  "users",
+                        localField: "owner",
+                        foreignField: "_id",
+                        aS: "owner",
+                        pipeline: [
+                            {
+                                $project: {
+                                    fullName: 1,
+                                    username: 1,
+                                    avatar: 1
+                                }
+                            }
+                        ]
+                    }
+                }],
+            }
+        },
+        {
+            $project: {
+                watchHistory: 1
+            }
+        }
+    ])
+
+    res
+    .status(200)
+    .json(
+        new apiResponse(200, user[0].watchHistory, "User watch history fetched successfully!" )
+    )
+})
+
 export { 
     registerUser, 
     loginUser, 
@@ -321,5 +450,7 @@ export {
     changeCurrentPassword,
     updateAccountDetails,
     updateAvatar,
-    updateCoverImage
+    updateCoverImage,
+    getUserChannelDetails,
+    getWatchHistory
 }
